@@ -17,13 +17,23 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Where the Python script had a `while True: poll neverssl every 10-60s`
- * loop, this is event-driven: Android tells us the instant a network
- * gains or loses the captive-portal capability, via NetworkCallback.
- * No polling, near-zero battery cost while idle.
+ * We do NOT rely on Android's NET_CAPABILITY_CAPTIVE_PORTAL flag as the
+ * trigger — that flag isn't reliably raised on a secondary network (Wi-Fi)
+ * when a validated network (mobile data) already exists as the OS's
+ * preferred default. From the OS's point of view you already have working
+ * internet, so it may never bother flagging Wi-Fi as captive at all, and
+ * our old capability-triggered check simply never fired.
+ *
+ * Instead: the moment ANY Wi-Fi network connects (TRANSPORT_WIFI, checked
+ * directly, independent of the captive flag), we actively check it
+ * ourselves on a short retry loop until it's confirmed online — every
+ * check still fully bound to that specific network (socket + DNS, see
+ * PortalLoginClient) so mobile data can never interfere with the check
+ * itself, only with whether we bother checking.
  */
 class CaptivePortalService : Service() {
 
@@ -32,24 +42,33 @@ class CaptivePortalService : Service() {
     private lateinit var credentialStore: CredentialStore
     private lateinit var statsStore: StatsStore
 
+    private var wifiNetwork: Network? = null
+    private var confirmedOnlineForNetwork: Network? = null
+    private var pollingJob: Job? = null
+
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
 
-        override fun onCapabilitiesChanged(
-            network: Network,
-            capabilities: NetworkCapabilities
-        ) {
-            val isCaptivePortal = capabilities.hasCapability(
-                NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL
-            )
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+            val isWifi = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            if (!isWifi) return // deliberately ignore cellular here — Wi-Fi only
 
-            if (isCaptivePortal) {
-                handlePortalDetected(network)
+            if (wifiNetwork != network) {
+                wifiNetwork = network
+                confirmedOnlineForNetwork = null
+                AppStatus.appendLog("Wi-Fi network detected, checking it directly")
+                startPolling(network)
             }
         }
 
         override fun onLost(network: Network) {
-            AppStatus.update(ConnectionState.WATCHING)
-            AppStatus.appendLog("Network lost, back to watching")
+            if (network == wifiNetwork) {
+                AppStatus.appendLog("Wi-Fi lost, back to watching")
+                wifiNetwork = null
+                confirmedOnlineForNetwork = null
+                pollingJob?.cancel()
+                AppStatus.update(ConnectionState.WATCHING)
+                updateNotification("Watching for captive portals...")
+            }
         }
     }
 
@@ -70,51 +89,60 @@ class CaptivePortalService : Service() {
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
-
         connectivityManager.registerNetworkCallback(request, networkCallback)
 
         return START_STICKY
     }
 
-    private fun handlePortalDetected(network: Network) {
+    /**
+     * Retries every 10s until this Wi-Fi network is confirmed online (either
+     * a successful login or a plain "already online" result), then stops.
+     * Cancelled early if Wi-Fi is lost or swapped for a different network.
+     */
+    private fun startPolling(network: Network) {
+        pollingJob?.cancel()
+        pollingJob = serviceScope.launch {
+            while (wifiNetwork == network && confirmedOnlineForNetwork != network) {
+                checkNetwork(network)
+                delay(10_000)
+            }
+        }
+    }
+
+    private suspend fun checkNetwork(network: Network) {
         val username = credentialStore.getUsername()
         val password = credentialStore.getPassword()
-
         if (username == null || password == null) {
-            AppStatus.appendLog("Portal detected but no saved credentials yet")
+            AppStatus.appendLog("Wi-Fi connected but no saved credentials yet")
             return
         }
 
-        AppStatus.update(ConnectionState.PORTAL_DETECTED)
-        AppStatus.appendLog("Captive portal detected, logging in...")
-        updateNotification("Portal detected, logging in...")
+        AppStatus.update(ConnectionState.LOGGING_IN)
+        val startTime = System.currentTimeMillis()
+        val client = PortalLoginClient(network)
 
-        serviceScope.launch {
-            AppStatus.update(ConnectionState.LOGGING_IN)
-            val startTime = System.currentTimeMillis()
-
-            val client = PortalLoginClient(network)
-            when (val result = client.attemptLogin(username, password)) {
-                is PortalLoginClient.Result.LoggedIn -> {
-                    val durationMs = System.currentTimeMillis() - startTime
-                    statsStore.recordLogin(durationMs)
-                    AppStatus.update(ConnectionState.LOGGED_IN)
-                    AppStatus.appendLog(result.message)
-                    updateNotification("Logged in ✅")
-                }
-                is PortalLoginClient.Result.AlreadyOnline -> {
-                    AppStatus.update(ConnectionState.WATCHING)
-                    AppStatus.appendLog(result.message)
-                }
-                is PortalLoginClient.Result.NoPortalYet -> {
-                    AppStatus.update(ConnectionState.WATCHING)
-                    AppStatus.appendLog(result.message)
-                }
-                is PortalLoginClient.Result.Failure -> {
-                    AppStatus.update(ConnectionState.ERROR)
-                    AppStatus.appendLog("Error: ${result.error}")
-                    updateNotification("Login failed, will retry on next network change")
-                }
+        when (val result = client.attemptLogin(username, password)) {
+            is PortalLoginClient.Result.LoggedIn -> {
+                confirmedOnlineForNetwork = network
+                statsStore.recordLogin(System.currentTimeMillis() - startTime)
+                AppStatus.update(ConnectionState.LOGGED_IN)
+                AppStatus.appendLog(result.message)
+                updateNotification("Logged in ✅")
+            }
+            is PortalLoginClient.Result.AlreadyOnline -> {
+                confirmedOnlineForNetwork = network
+                AppStatus.update(ConnectionState.WATCHING)
+                AppStatus.appendLog(result.message)
+                updateNotification("Watching for captive portals...")
+            }
+            is PortalLoginClient.Result.NoPortalYet -> {
+                AppStatus.update(ConnectionState.WATCHING)
+                AppStatus.appendLog(result.message)
+            }
+            is PortalLoginClient.Result.Failure -> {
+                AppStatus.update(ConnectionState.ERROR)
+                AppStatus.appendLog("Check failed, retrying: ${result.error}")
+                updateNotification("Retrying login...")
             }
         }
     }
@@ -155,6 +183,7 @@ class CaptivePortalService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         connectivityManager.unregisterNetworkCallback(networkCallback)
+        pollingJob?.cancel()
         AppStatus.update(ConnectionState.IDLE)
     }
 
@@ -170,9 +199,6 @@ class CaptivePortalService : Service() {
         }
 
         fun stop(context: Context) {
-            // markStopped() lives here, not in onDestroy(), so it only
-            // fires on a genuine user-requested stop — not when the OS
-            // kills and START_STICKY silently restarts the service.
             StatsStore(context).markStopped()
             context.stopService(Intent(context, CaptivePortalService::class.java))
         }
