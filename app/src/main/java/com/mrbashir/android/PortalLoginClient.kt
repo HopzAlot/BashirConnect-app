@@ -8,6 +8,8 @@ import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.InetAddress
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -18,19 +20,11 @@ import java.util.concurrent.TimeUnit
  *      the Fortinet portal — pull the "magic" token from the query string.
  *   3. POST username/password/magic back to the portal's base URL.
  *
- * Critical fix vs. the original desktop script: on a phone with both
- * Wi-Fi and mobile data active, Android's default network routing can
- * send this request over cellular even while we're actively watching
- * the Wi-Fi network — so a plain requests.Session() (or an unbound
- * OkHttpClient) gets a real 200 from neverssl.com and wrongly concludes
- * "already online" while the Wi-Fi is still stuck behind the portal.
- * That's exactly the "had to turn mobile data off and back on" bug.
- * Binding BOTH the socket (via socketFactory) AND DNS resolution (via
- * a custom Dns backed by network.getAllByName) to the specific captive
- * Network object closes that gap — every part of the request, including
- * the hostname lookup, is forced through the Wi-Fi network we're
- * actually trying to log into, regardless of what the OS would pick by
- * default.
+ * Everything is bound to a *specific* Network object — both the socket
+ * (socketFactory) AND DNS resolution (custom Dns via
+ * network.getAllByName) — so this always talks to the network we're
+ * actually trying to log into, regardless of mobile data or whatever
+ * network Android would otherwise pick as "default".
  */
 class PortalLoginClient(network: Network) {
 
@@ -39,14 +33,12 @@ class PortalLoginClient(network: Network) {
         .dns(NetworkBoundDns(network))
         .followRedirects(true)
         .followSslRedirects(true)
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
         .build()
 
     private class NetworkBoundDns(private val network: Network) : Dns {
         override fun lookup(hostname: String): List<InetAddress> {
-            // Resolves via this network's own DNS servers, not whichever
-            // network Android would otherwise pick as "default".
             return network.getAllByName(hostname).toList()
         }
     }
@@ -102,6 +94,10 @@ class PortalLoginClient(network: Network) {
                         }
                     }
                 }
+            } catch (e: UnknownHostException) {
+                Result.Failure("DNS lookup failed for neverssl.com on this network")
+            } catch (e: SocketTimeoutException) {
+                Result.Failure("Connection to neverssl.com timed out (network may still be settling)")
             } catch (e: Exception) {
                 Result.Failure(e.message ?: "Unknown network error")
             }
