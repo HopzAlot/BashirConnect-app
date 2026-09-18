@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Direct port of the Python persistent_login_loop's HTTP logic:
- *   1. GET a plain-HTTP canary URL (neverssl.com) that has no HTTPS to
+ *   1. GET a plain-HTTP canary URL (httpforever.com) that has no HTTPS to
  *      redirect through, so a captive portal can transparently hijack it.
  *   2. If the final URL after redirects contains "fgtauth", we're behind
  *      the Fortinet portal — pull the "magic" token from the query string.
@@ -54,7 +54,7 @@ class PortalLoginClient(network: Network) {
         withContext(Dispatchers.IO) {
             try {
                 val canaryRequest = Request.Builder()
-                    .url("http://neverssl.com")
+                    .url("http://httpforever.com")
                     .build()
 
                 client.newCall(canaryRequest).execute().use { response ->
@@ -85,7 +85,7 @@ class PortalLoginClient(network: Network) {
                             }
                         }
 
-                        finalUrl.contains("neverssl.com") -> {
+                        finalUrl.contains("httpforever.com") -> {
                             Result.AlreadyOnline("Already online, no portal in the way")
                         }
 
@@ -95,9 +95,9 @@ class PortalLoginClient(network: Network) {
                     }
                 }
             } catch (e: UnknownHostException) {
-                Result.Failure("DNS lookup failed for neverssl.com on this network")
+                Result.Failure("DNS lookup failed for httpforever.com on this network")
             } catch (e: SocketTimeoutException) {
-                Result.Failure("Connection to neverssl.com timed out (network may still be settling)")
+                Result.Failure("Connection to httpforever.com timed out (network may still be settling)")
             } catch (e: Exception) {
                 Result.Failure(e.message ?: "Unknown network error")
             }
