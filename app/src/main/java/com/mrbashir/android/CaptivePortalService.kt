@@ -21,19 +21,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * We do NOT rely on Android's NET_CAPABILITY_CAPTIVE_PORTAL flag as the
- * trigger — that flag isn't reliably raised on a secondary network (Wi-Fi)
- * when a validated network (mobile data) already exists as the OS's
- * preferred default. From the OS's point of view you already have working
- * internet, so it may never bother flagging Wi-Fi as captive at all, and
- * our old capability-triggered check simply never fired.
+ * Two things had to be fixed vs. a naive NetworkCallback approach, both
+ * around the same root problem: registerNetworkCallback only gives an app
+ * VISIBILITY into a network's existence, not permission to actually route
+ * traffic through it when it's unvalidated and mobile data is the OS's
+ * chosen default.
  *
- * Instead: the moment ANY Wi-Fi network connects (TRANSPORT_WIFI, checked
- * directly, independent of the captive flag), we actively check it
- * ourselves on a short retry loop until it's confirmed online — every
- * check still fully bound to that specific network (socket + DNS, see
- * PortalLoginClient) so mobile data can never interfere with the check
- * itself, only with whether we bother checking.
+ *  1. requestNetwork() (not registerNetworkCallback) is what actually
+ *     reserves usage rights to Wi-Fi for this app, even while it's
+ *     unvalidated.
+ *  2. bindProcessToNetwork() during the actual check forces ALL of this
+ *     app's traffic over that specific network for the duration of the
+ *     check, then releases the bind immediately after — belt-and-braces
+ *     on top of PortalLoginClient's own per-request socket + DNS binding.
+ *
+ * We also don't rely on Android's NET_CAPABILITY_CAPTIVE_PORTAL flag as
+ * the trigger — it isn't reliably raised on a secondary network when a
+ * validated network (mobile data) already exists as the default. Instead,
+ * the moment ANY Wi-Fi network connects (TRANSPORT_WIFI, checked
+ * directly), we actively check it ourselves on a short retry loop until
+ * it's confirmed online.
  */
 class CaptivePortalService : Service() {
 
@@ -86,10 +93,12 @@ class CaptivePortalService : Service() {
         AppStatus.appendLog("Mr. Bashir woke up, watching networks")
         statsStore.markStarted()
 
+        // requestNetwork, not registerNetworkCallback — see class doc.
         val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
-        connectivityManager.registerNetworkCallback(request, networkCallback)
+        connectivityManager.requestNetwork(request, networkCallback)
 
         return START_STICKY
     }
@@ -121,29 +130,38 @@ class CaptivePortalService : Service() {
         val startTime = System.currentTimeMillis()
         val client = PortalLoginClient(network)
 
-        when (val result = client.attemptLogin(username, password)) {
-            is PortalLoginClient.Result.LoggedIn -> {
-                confirmedOnlineForNetwork = network
-                statsStore.recordLogin(System.currentTimeMillis() - startTime)
-                AppStatus.update(ConnectionState.LOGGED_IN)
-                AppStatus.appendLog(result.message)
-                updateNotification("Logged in ✅")
+        // Forces ALL of this app's traffic through Wi-Fi for the duration
+        // of the check, released in the finally block right after — we
+        // don't want to permanently pin the whole app off mobile data.
+        connectivityManager.bindProcessToNetwork(network)
+
+        try {
+            when (val result = client.attemptLogin(username, password)) {
+                is PortalLoginClient.Result.LoggedIn -> {
+                    confirmedOnlineForNetwork = network
+                    statsStore.recordLogin(System.currentTimeMillis() - startTime)
+                    AppStatus.update(ConnectionState.LOGGED_IN)
+                    AppStatus.appendLog(result.message)
+                    updateNotification("Logged in ✅")
+                }
+                is PortalLoginClient.Result.AlreadyOnline -> {
+                    confirmedOnlineForNetwork = network
+                    AppStatus.update(ConnectionState.WATCHING)
+                    AppStatus.appendLog(result.message)
+                    updateNotification("Watching for captive portals...")
+                }
+                is PortalLoginClient.Result.NoPortalYet -> {
+                    AppStatus.update(ConnectionState.WATCHING)
+                    AppStatus.appendLog(result.message)
+                }
+                is PortalLoginClient.Result.Failure -> {
+                    AppStatus.update(ConnectionState.ERROR)
+                    AppStatus.appendLog("Check failed, retrying: ${result.error}")
+                    updateNotification("Retrying login...")
+                }
             }
-            is PortalLoginClient.Result.AlreadyOnline -> {
-                confirmedOnlineForNetwork = network
-                AppStatus.update(ConnectionState.WATCHING)
-                AppStatus.appendLog(result.message)
-                updateNotification("Watching for captive portals...")
-            }
-            is PortalLoginClient.Result.NoPortalYet -> {
-                AppStatus.update(ConnectionState.WATCHING)
-                AppStatus.appendLog(result.message)
-            }
-            is PortalLoginClient.Result.Failure -> {
-                AppStatus.update(ConnectionState.ERROR)
-                AppStatus.appendLog("Check failed, retrying: ${result.error}")
-                updateNotification("Retrying login...")
-            }
+        } finally {
+            connectivityManager.bindProcessToNetwork(null)
         }
     }
 
@@ -183,6 +201,7 @@ class CaptivePortalService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         connectivityManager.unregisterNetworkCallback(networkCallback)
+        connectivityManager.bindProcessToNetwork(null)
         pollingJob?.cancel()
         AppStatus.update(ConnectionState.IDLE)
     }
