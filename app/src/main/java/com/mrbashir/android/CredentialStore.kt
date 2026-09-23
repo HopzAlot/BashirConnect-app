@@ -21,19 +21,9 @@ import androidx.security.crypto.MasterKey
  */
 class CredentialStore(context: Context) {
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
     /** false only if both encrypted attempts failed on this device. */
     val isEncrypted: Boolean
 
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "mr_bashir_creds",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
     private val prefs: SharedPreferences
 
     init {
