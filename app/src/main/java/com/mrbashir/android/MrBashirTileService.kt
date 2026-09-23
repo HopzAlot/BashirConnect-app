@@ -23,6 +23,12 @@ import kotlinx.coroutines.launch
  *    instead of silently doing nothing.
  *  - ACTIVE: service running, watching for captive portals.
  *  - INACTIVE: credentials saved but stopped.
+ *
+ * isRunning is determined by StatsStore.isServiceEnabled() rather than
+ * AppStatus.state — AppStatus is an in-process singleton that resets to
+ * IDLE on every process start (including START_STICKY restarts), making
+ * it unreliable for the tile. StatsStore persists to disk and accurately
+ * reflects user intent across process restarts.
  */
 class MrBashirTileService : TileService() {
 
@@ -57,6 +63,10 @@ class MrBashirTileService : TileService() {
         }
 
         val isRunning = AppStatus.state.value != ConnectionState.IDLE
+        // Use StatsStore (disk-backed) rather than AppStatus.state (in-memory).
+        // If the process was restarted by START_STICKY, AppStatus is IDLE even
+        // though the service is running — StatsStore tells the truth.
+        val isRunning = StatsStore(this).isServiceEnabled()
         if (isRunning) {
             CaptivePortalService.stop(this)
         } else {
@@ -84,6 +94,8 @@ class MrBashirTileService : TileService() {
         val tile = qsTile ?: return
         val credentialStore = CredentialStore(this)
         val isRunning = AppStatus.state.value != ConnectionState.IDLE
+        // Same reasoning as onClick: StatsStore survives process restarts.
+        val isRunning = StatsStore(this).isServiceEnabled()
 
         tile.state = when {
             !credentialStore.hasCredentials() -> Tile.STATE_UNAVAILABLE

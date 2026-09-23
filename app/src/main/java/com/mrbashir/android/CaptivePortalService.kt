@@ -35,12 +35,17 @@ import kotlinx.coroutines.launch
  *     check, then releases the bind immediately after — belt-and-braces
  *     on top of PortalLoginClient's own per-request socket + DNS binding.
  *
- * We also don't rely on Android's NET_CAPABILITY_CAPTIVE_PORTAL flag as
- * the trigger — it isn't reliably raised on a secondary network when a
- * validated network (mobile data) already exists as the default. Instead,
- * the moment ANY Wi-Fi network connects (TRANSPORT_WIFI, checked
- * directly), we actively check it ourselves on a short retry loop until
- * it's confirmed online.
+ * We do NOT request NET_CAPABILITY_INTERNET — when mobile data is the
+ * primary validated network, Android may not report that capability on
+ * the captive-portal Wi-Fi, so requiring it would silently exclude the
+ * network we actually need. We probe the network ourselves and don't
+ * need the OS to pre-validate it.
+ *
+ * IMPORTANT: the callback handles onAvailable as well as
+ * onCapabilitiesChanged. onAvailable fires when a matching network first
+ * becomes accessible; onCapabilitiesChanged fires only for later changes.
+ * If Wi-Fi is already connected when the service starts (the common
+ * real-world case), we'd miss it entirely without onAvailable.
  */
 class CaptivePortalService : Service() {
 
@@ -53,7 +58,31 @@ class CaptivePortalService : Service() {
     private var confirmedOnlineForNetwork: Network? = null
     private var pollingJob: Job? = null
 
+    /** Guards against registering the same callback multiple times if
+     *  onStartCommand fires more than once (tile tap while already running,
+     *  START_STICKY re-delivery, etc.). */
+    private var isCallbackRegistered = false
+
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+
+        /**
+         * Fires when a network satisfying our request first becomes accessible.
+         * This is the primary trigger when Wi-Fi is already connected at
+         * service-start time — onCapabilitiesChanged only fires for *changes*
+         * after the network is already known, so we'd never start polling
+         * without handling onAvailable.
+         */
+        override fun onAvailable(network: Network) {
+            val caps = connectivityManager.getNetworkCapabilities(network) ?: return
+            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return
+
+            if (wifiNetwork != network) {
+                wifiNetwork = network
+                confirmedOnlineForNetwork = null
+                AppStatus.appendLog("Wi-Fi available, starting check")
+                startPolling(network)
+            }
+        }
 
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             val isWifi = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
@@ -93,12 +122,16 @@ class CaptivePortalService : Service() {
         AppStatus.appendLog("Mr. Bashir woke up, watching networks")
         statsStore.markStarted()
 
-        // requestNetwork, not registerNetworkCallback — see class doc.
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-        connectivityManager.requestNetwork(request, networkCallback)
+        // Guard: requestNetwork with the same callback more than once causes
+        // duplicate callbacks and undefined behaviour. Skip if already registered.
+        if (!isCallbackRegistered) {
+            // No NET_CAPABILITY_INTERNET — see class-level doc for why.
+            val request = NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .build()
+            connectivityManager.requestNetwork(request, networkCallback)
+            isCallbackRegistered = true
+        }
 
         return START_STICKY
     }
@@ -200,7 +233,10 @@ class CaptivePortalService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        connectivityManager.unregisterNetworkCallback(networkCallback)
+        if (isCallbackRegistered) {
+            connectivityManager.unregisterNetworkCallback(networkCallback)
+            isCallbackRegistered = false
+        }
         connectivityManager.bindProcessToNetwork(null)
         pollingJob?.cancel()
         AppStatus.update(ConnectionState.IDLE)
