@@ -12,16 +12,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
@@ -35,12 +39,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Install FIRST — catches any exception that follows, including
+        // EncryptedSharedPreferences crashes, Compose init failures, etc.
+        CrashReporter.install(this)
+
         credentialStore = CredentialStore(this)
         requestNotificationPermissionIfNeeded()
 
         setContent {
             MaterialTheme(typography = MrBashirTypography) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    // Check for a crash saved from the previous run and show it
+                    // in a dialog so you can read it without USB / Logcat.
+                    val pendingCrash = remember {
+                        CrashReporter.consumePendingCrash(this@MainActivity)
+                    }
+                    if (pendingCrash != null) {
+                        CrashDialog(trace = pendingCrash)
+                    }
+
                     MrBashirScreen(
                         credentialStore = credentialStore,
                         onSave = { username, password ->
@@ -352,3 +370,31 @@ private fun formatStreak(streakMs: Long): String {
     }
 }
 
+/**
+ * Shows a scrollable dialog with the previous run's crash stack trace.
+ * Only appears when CrashReporter has a saved trace — helps diagnose
+ * crashes without needing USB / logcat / Termux.
+ */
+@Composable
+private fun CrashDialog(trace: String) {
+    var open by remember { mutableStateOf(true) }
+    if (!open) return
+
+    AlertDialog(
+        onDismissRequest = { open = false },
+        confirmButton = {
+            TextButton(onClick = { open = false }) { Text("Dismiss") }
+        },
+        title = { Text("⚠️ Previous crash", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Text(
+                text = trace,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                modifier = Modifier
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState())
+            )
+        }
+    )
+}
