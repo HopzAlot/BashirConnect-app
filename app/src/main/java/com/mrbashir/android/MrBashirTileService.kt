@@ -62,7 +62,6 @@ class MrBashirTileService : TileService() {
             return
         }
 
-        val isRunning = AppStatus.state.value != ConnectionState.IDLE
         // Use StatsStore (disk-backed) rather than AppStatus.state (in-memory).
         // If the process was restarted by START_STICKY, AppStatus is IDLE even
         // though the service is running — StatsStore tells the truth.
@@ -93,7 +92,6 @@ class MrBashirTileService : TileService() {
     private fun refreshTile() {
         val tile = qsTile ?: return
         val credentialStore = CredentialStore(this)
-        val isRunning = AppStatus.state.value != ConnectionState.IDLE
         // Same reasoning as onClick: StatsStore survives process restarts.
         val isRunning = StatsStore(this).isServiceEnabled()
 

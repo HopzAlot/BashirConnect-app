@@ -14,8 +14,6 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Direct port of the Python persistent_login_loop's HTTP logic:
- *   1. GET a plain-HTTP canary URL (httpforever.com) that has no HTTPS to
- *      redirect through, so a captive portal can transparently hijack it.
  *   1. GET the standard Android captive-portal canary URL
  *      (connectivitycheck.gstatic.com/generate_204). Fortinet Fortigate
  *      devices are explicitly configured to intercept this URL and redirect
@@ -66,7 +64,6 @@ class PortalLoginClient(network: Network) {
                 // (No Content) when there is a real internet connection.
                 // Captive portals redirect it to their login page instead.
                 val canaryRequest = Request.Builder()
-                    .url("http://httpforever.com")
                     .url("http://connectivitycheck.gstatic.com/generate_204")
                     .header(
                         "User-Agent",
@@ -104,7 +101,6 @@ class PortalLoginClient(network: Network) {
                             }
                         }
 
-                        finalUrl.contains("httpforever.com") -> {
                         response.code == 204 -> {
                             // Standard "you're online" response — no portal in the way.
                             Result.AlreadyOnline("Already online (HTTP 204, no portal)")
@@ -122,10 +118,8 @@ class PortalLoginClient(network: Network) {
                     }
                 }
             } catch (e: UnknownHostException) {
-                Result.Failure("DNS lookup failed for httpforever.com on this network")
                 Result.Failure("DNS lookup failed for connectivitycheck.gstatic.com on this network")
             } catch (e: SocketTimeoutException) {
-                Result.Failure("Connection to httpforever.com timed out (network may still be settling)")
                 Result.Failure("Connection timed out (network may still be settling)")
             } catch (e: Exception) {
                 Result.Failure(e.message ?: "Unknown network error")
