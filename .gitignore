@@ -1,4 +1,44 @@
-.agents
+# ============================================================
+# BashirConnect Android — .gitignore
+# ============================================================
+
+# --- Gradle build outputs ---
+.gradle/
+build/
+app/build/
+**/build/
+
+# --- Android Studio / IntelliJ IDEA ---
+*.iml
+.idea/
+*.iws
+*.ipr
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# --- Keystore / signing (NEVER commit these) ---
+*.jks
+*.keystore
+release/
+keystore.properties
+
+# --- Generated / intermediate ---
+gen/
+out/
+bin/
+obj/
+
+# --- OS noise ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Teamwork agent working files (internal scaffolding) ---
+.agents/
 ORIGINAL_REQUEST.md
-design
-docs
+
+# --- Docs & design artefacts (agent-generated, tracked separately) ---
+docs/
+design/
