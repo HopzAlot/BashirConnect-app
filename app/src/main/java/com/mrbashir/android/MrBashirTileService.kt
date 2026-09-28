@@ -69,18 +69,7 @@ class MrBashirTileService : TileService() {
         if (isRunning) {
             CaptivePortalService.stop(this)
         } else {
-            // Android 12+ (API 31+): ForegroundServiceStartNotAllowedException is thrown
-            // when startForegroundService() is called outside an allowed foreground
-            // context. TileService grants this privilege ONLY for the duration of the
-            // onClick() call on the tile's own context — so we call it here directly,
-            // not through CaptivePortalService.start(context) from a detached helper.
-            StatsStore(this).markStarted()
-            val intent = Intent(this, CaptivePortalService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            CaptivePortalService.start(this)
         }
         refreshTile()
     }
