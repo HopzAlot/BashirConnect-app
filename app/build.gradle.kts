@@ -11,10 +11,8 @@ android {
         applicationId = "com.mrbashir.android"
         minSdk = 26
         targetSdk = 34
-        // versionCode and versionName are injected by CI via -PversionCode / -PversionName.
-        // When building locally they fall back to safe defaults so nothing breaks.
-        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = (project.findProperty("versionName") as String?) ?: "1.0-local"
+        versionCode = 1
+        versionName = "1.0"
     }
 
     buildTypes {
