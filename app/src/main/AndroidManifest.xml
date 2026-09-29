@@ -25,6 +25,17 @@
             android:resource="@array/preloaded_fonts" />
 
         <!--
+          AdMob Application ID — REQUIRED. Without this the SDK throws
+          IllegalStateException and the app crashes immediately on startup.
+          Value is injected from build.gradle.kts manifestPlaceholders:
+            debug  → Google official test app ID (safe, no policy risk)
+            release → your real AdMob App ID from the AdMob console
+        -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+
+        <!--
           usesCleartextTraffic is required because captive portals (and neverssl.com,
           the canary URL used to detect them) are plain HTTP by design — a captive
           portal can't intercept HTTPS traffic to redirect you to the login page.
