@@ -1,13 +1,18 @@
-name: Build debug APK
+name: Build & Release APK
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
 
+# Needs write access to create GitHub Releases and attach the APK
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,6 +21,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      # ── Version stamp ──────────────────────────────────────────────────────
+      # versionCode = run number (monotonically increasing, perfect for APK)
+      # versionName = 1.{run_number}  e.g. 1.42
+      # Release tag  = v1.{run_number}-{short_sha}  e.g. v1.42-a1b2c3d
+      - name: Compute version
+        id: ver
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION_CODE=${{ github.run_number }}
+          VERSION_NAME="1.${{ github.run_number }}"
+          TAG="v${VERSION_NAME}-${SHORT_SHA}"
+          APK_NAME="BashirConnect-${TAG}.apk"
+          echo "code=${VERSION_CODE}"   >> $GITHUB_OUTPUT
+          echo "name=${VERSION_NAME}"   >> $GITHUB_OUTPUT
+          echo "tag=${TAG}"             >> $GITHUB_OUTPUT
+          echo "apk=${APK_NAME}"        >> $GITHUB_OUTPUT
 
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
@@ -28,11 +50,38 @@ jobs:
         with:
           gradle-version: 8.7
 
+      # Pass version into Gradle so the installed APK reports the right version
       - name: Build debug APK
-        run: gradle assembleDebug
+        run: |
+          gradle assembleDebug \
+            -PversionCode=${{ steps.ver.outputs.code }} \
+            -PversionName=${{ steps.ver.outputs.name }}
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mr-bashir-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+      # Rename the APK to include the version tag before uploading
+      - name: Rename APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk "${{ steps.ver.outputs.apk }}"
+
+      # Creates a GitHub Release and attaches the APK directly.
+      # Users download the .apk file from the Releases page — no unzipping needed.
+      - name: Create GitHub Release & upload APK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            "${{ steps.ver.outputs.apk }}" \
+            --title "BashirConnect ${{ steps.ver.outputs.tag }}" \
+            --notes "$(cat <<'EOF'
+          ## BashirConnect ${{ steps.ver.outputs.tag }}
+
+          **Build:** #${{ github.run_number }}
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+
+          ### Install
+          1. Download \`${{ steps.ver.outputs.apk }}\` below
+          2. Transfer to your Android phone
+          3. Open the file — tap **Install** (allow unknown sources if prompted)
+          EOF
+          )" \
+            --prerelease

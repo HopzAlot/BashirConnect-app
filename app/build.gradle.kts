@@ -11,31 +11,15 @@ android {
         applicationId = "com.mrbashir.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // versionCode and versionName are injected by CI via -PversionCode / -PversionName.
+        // When building locally they fall back to safe defaults so nothing breaks.
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0-local"
     }
 
     buildTypes {
-        debug {
-            isMinifyEnabled = false
-            // Official Google test IDs — safe for development, zero policy risk
-            manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
-            buildConfigField("String", "ADMOB_BANNER_ID", "\"ca-app-pub-3940256099942544/6300978111\"")
-        }
         release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-            // Read from ~/.gradle/gradle.properties or CI env — never hardcode in source
-            manifestPlaceholders["admobAppId"] =
-                (project.findProperty("PROD_ADMOB_APP_ID") as String?)
-                    ?: "ca-app-pub-3940256099942544~3347511713" // fallback to test ID
-            buildConfigField(
-                "String", "ADMOB_BANNER_ID",
-                "\"${project.findProperty("PROD_ADMOB_BANNER_ID") ?: "ca-app-pub-3940256099942544/6300978111"}\""
-            )
+            isMinifyEnabled = false
         }
     }
 
@@ -50,7 +34,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true  // Needed to expose ADMOB_BANNER_ID as BuildConfig.ADMOB_BANNER_ID
     }
 
     composeOptions {
@@ -77,7 +60,4 @@ dependencies {
 
     // Coroutines for background work off the main thread
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-
-    // Google AdMob — banner ad at bottom of screen
-    implementation("com.google.android.gms:play-services-ads:23.3.0")
 }

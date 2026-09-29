@@ -21,7 +21,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.google.android.gms.ads.MobileAds
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -38,10 +37,6 @@ class MainActivity : ComponentActivity() {
         // Install FIRST — catches any exception that follows, including
         // EncryptedSharedPreferences crashes, Compose init failures, etc.
         CrashReporter.install(this)
-
-        // Initialize AdMob SDK once. Must be called before any ad is loaded.
-        // This is a lightweight background init — does not block the UI thread.
-        MobileAds.initialize(this)
 
         credentialStore = CredentialStore(this)
         requestNotificationPermissionIfNeeded()
@@ -125,21 +120,7 @@ fun MrBashirScreen(
     val log by AppStatus.log.collectAsState()
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            // Banner is pinned at the bottom inside Scaffold so it NEVER
-            // overlaps buttons or text — Scaffold gives the content
-            // innerPadding that already accounts for the banner height.
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-            ) {
-                AdMobBanner(modifier = Modifier.fillMaxWidth())
-            }
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
