@@ -24,10 +24,9 @@ jobs:
       - name: Compute version
         id: ver
         run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
           VERSION_CODE=${{ github.run_number }}
           VERSION_NAME="1.${{ github.run_number }}"
-          TAG="v${VERSION_NAME}-${SHORT_SHA}"
+          TAG="v${VERSION_NAME}"
           APK_NAME="BashirConnect-${TAG}.apk"
           echo "code=${VERSION_CODE}"  >> $GITHUB_OUTPUT
           echo "name=${VERSION_NAME}"  >> $GITHUB_OUTPUT
@@ -48,22 +47,17 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug -PversionCode=${{ github.run_number }} -PversionName=1.${{ github.run_number }}
 
-      # Create both version-tagged APK and a direct clean BashirConnect.apk
-      - name: Prepare APKs
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk "${{ steps.ver.outputs.apk }}"
-          cp app/build/outputs/apk/debug/app-debug.apk BashirConnect.apk
+      # Prepare only the single versioned APK
+      - name: Prepare APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk "${{ steps.ver.outputs.apk }}"
 
-      # Publishes as official "Latest" release (not prerelease)
-      # Enables direct 1-click download link:
-      # https://github.com/HopzAlot/BashirConnect-app/releases/latest/download/BashirConnect.apk
+      # Creates release titled "bashirconnectapk" with only the versioned APK asset
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ steps.ver.outputs.tag }}" \
             "${{ steps.ver.outputs.apk }}" \
-            "BashirConnect.apk" \
-            --title "BashirConnect ${{ steps.ver.outputs.tag }}" \
+            --title "bashirconnectapk" \
             --notes "Build #${{ github.run_number }} — commit ${{ github.sha }}" \
             --latest

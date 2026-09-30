@@ -2,11 +2,11 @@
 
 Auto-login to university Fortinet captive portal (`fgtauth`) campus Wi-Fi.
 
-[![Download Latest APK](https://img.shields.io/badge/Download-Latest%20APK-2ea44f?style=for-the-badge&logo=android)](https://github.com/HopzAlot/BashirConnect-app/releases/latest/download/BashirConnect.apk)
+[![Download Latest APK](https://img.shields.io/badge/Download-Latest%20APK-2ea44f?style=for-the-badge&logo=android)](https://github.com/HopzAlot/BashirConnect-app/releases/latest)
 
-> 📲 **Direct Download Link:**  
-> **[👉 Click here to download BashirConnect.apk](https://github.com/HopzAlot/BashirConnect-app/releases/latest/download/BashirConnect.apk)**  
-> *(Always downloads the latest release directly to your phone — no unzipping or picking versions required!)*
+> 📲 **Download Latest Release:**  
+> **[👉 Click here to download BashirConnect APK](https://github.com/HopzAlot/BashirConnect-app/releases/latest)**  
+> *(Always points to the latest release — tap the `.apk` file under Assets to install!)*
 
 ---
 
@@ -22,8 +22,8 @@ Auto-login to university Fortinet captive portal (`fgtauth`) campus Wi-Fi.
 
 ## Quick Install (Phone)
 
-1. Tap the **[Download Latest APK](https://github.com/HopzAlot/BashirConnect-app/releases/latest/download/BashirConnect.apk)** link on your phone.
-2. When the `.apk` finishes downloading, tap to open it.
+1. Tap the **[Download Latest APK](https://github.com/HopzAlot/BashirConnect-app/releases/latest)** link on your phone.
+2. Under **Assets**, tap `BashirConnect-v*.apk` to download.
 3. Tap **Install** (if prompted by Android, allow "Install unknown apps" for your browser).
 4. Open the app, enter your **Student ID** and **Password** once, and Mr. Bashir handles campus Wi-Fi logins automatically!
 
