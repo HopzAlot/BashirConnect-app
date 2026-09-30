@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,8 +50,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Check for a crash saved from the previous run and show it
-                    // in a dialog so you can read it without USB / Logcat.
                     val pendingCrash = remember {
                         CrashReporter.consumePendingCrash(this@MainActivity)
                     }
@@ -56,19 +57,27 @@ class MainActivity : ComponentActivity() {
                         CrashDialog(trace = pendingCrash)
                     }
 
-                    MrBashirScreen(
-                        credentialStore = credentialStore,
-                        onSave = { username, password ->
-                            credentialStore.save(username, password)
-                            CaptivePortalService.start(this)
-                        },
-                        onStart = { CaptivePortalService.start(this) },
-                        onStop = { CaptivePortalService.stop(this) },
-                        onForget = {
-                            credentialStore.clear()
-                            CaptivePortalService.stop(this)
-                        }
-                    )
+                    // Simple in-memory navigation: main screen ↔ tip jar
+                    var showTipJar by remember { mutableStateOf(false) }
+
+                    if (showTipJar) {
+                        TipJarScreen(onBack = { showTipJar = false })
+                    } else {
+                        MrBashirScreen(
+                            credentialStore = credentialStore,
+                            onSave = { username, password ->
+                                credentialStore.save(username, password)
+                                CaptivePortalService.start(this)
+                            },
+                            onStart = { CaptivePortalService.start(this) },
+                            onStop = { CaptivePortalService.stop(this) },
+                            onForget = {
+                                credentialStore.clear()
+                                CaptivePortalService.stop(this)
+                            },
+                            onShowTipJar = { showTipJar = true }
+                        )
+                    }
                 }
             }
         }
@@ -92,7 +101,8 @@ fun MrBashirScreen(
     onSave: (String, String) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onForget: () -> Unit
+    onForget: () -> Unit,
+    onShowTipJar: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var hasCredentials by remember { mutableStateOf(credentialStore.hasCredentials()) }
@@ -120,7 +130,52 @@ fun MrBashirScreen(
     val log by AppStatus.log.collectAsState()
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 4.dp, bottom = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Fund Me Jar button at bottom above copyright
+                Surface(
+                    onClick = onShowTipJar,
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text("🍯", fontSize = 18.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Fund Me Jar · Keep Bashir Saab Alive ☕",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Copyright shifted to the very bottom
+                Text(
+                    text = "© 2026 BashirConnect",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -229,16 +284,6 @@ fun MrBashirScreen(
             )
 
             Spacer(Modifier.height(16.dp))
-
-            Text(
-                text = "© 2026 BashirConnect · v1.0",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
