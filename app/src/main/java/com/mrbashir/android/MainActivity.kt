@@ -71,6 +71,10 @@ class MainActivity : ComponentActivity() {
                             },
                             onStart = { CaptivePortalService.start(this) },
                             onStop = { CaptivePortalService.stop(this) },
+                            onForget = {
+                                credentialStore.clear()
+                                CaptivePortalService.stop(this)
+                            },
                             onShowTipJar = { showTipJar = true }
                         )
                     }
@@ -97,6 +101,7 @@ fun MrBashirScreen(
     onSave: (String, String) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onForget: (() -> Unit)? = null,
     onShowTipJar: () -> Unit = {}
 ) {
     val context = LocalContext.current

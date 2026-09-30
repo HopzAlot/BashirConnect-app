@@ -58,6 +58,6 @@ jobs:
         run: |
           gh release create "${{ steps.ver.outputs.tag }}" \
             "${{ steps.ver.outputs.apk }}" \
-            --title "bashirConnect" \
+            --title "BashirConnect" \
             --notes "Build #${{ github.run_number }} — commit ${{ github.sha }}" \
             --latest
