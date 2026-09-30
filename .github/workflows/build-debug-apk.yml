@@ -48,15 +48,22 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug -PversionCode=${{ github.run_number }} -PversionName=1.${{ github.run_number }}
 
-      - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk "${{ steps.ver.outputs.apk }}"
+      # Create both version-tagged APK and a direct clean BashirConnect.apk
+      - name: Prepare APKs
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk "${{ steps.ver.outputs.apk }}"
+          cp app/build/outputs/apk/debug/app-debug.apk BashirConnect.apk
 
+      # Publishes as official "Latest" release (not prerelease)
+      # Enables direct 1-click download link:
+      # https://github.com/HopzAlot/BashirConnect-app/releases/latest/download/BashirConnect.apk
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ steps.ver.outputs.tag }}" \
             "${{ steps.ver.outputs.apk }}" \
+            "BashirConnect.apk" \
             --title "BashirConnect ${{ steps.ver.outputs.tag }}" \
             --notes "Build #${{ github.run_number }} — commit ${{ github.sha }}" \
-            --prerelease
+            --latest
