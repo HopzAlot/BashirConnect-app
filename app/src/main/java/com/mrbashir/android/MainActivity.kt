@@ -71,10 +71,6 @@ class MainActivity : ComponentActivity() {
                             },
                             onStart = { CaptivePortalService.start(this) },
                             onStop = { CaptivePortalService.stop(this) },
-                            onForget = {
-                                credentialStore.clear()
-                                CaptivePortalService.stop(this)
-                            },
                             onShowTipJar = { showTipJar = true }
                         )
                     }
