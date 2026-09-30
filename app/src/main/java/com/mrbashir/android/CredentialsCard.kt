@@ -1,6 +1,8 @@
 package com.mrbashir.android
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,9 +30,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
 /**
- * Prominent credentials onboarding form displayed when no credentials are saved.
- * Features frictionless labels, password show/hide eye toggle, and a visually primary
- * "Save & start" button.
+ * Credentials form displayed when no credentials are saved or when editing existing credentials.
+ * Features Student ID and Password field hints, password show/hide eye toggle,
+ * and support for both initial setup and updating credentials.
  */
 @Composable
 fun CredentialsCard(
@@ -41,7 +44,9 @@ fun CredentialsCard(
     onTogglePasswordVisibility: () -> Unit,
     validationError: String?,
     onSaveAndStart: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isEditing: Boolean = false,
+    onCancel: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -50,13 +55,17 @@ fun CredentialsCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Portal credentials",
+                text = if (isEditing) "Edit credentials" else "Portal credentials",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Save once. Mr. Bashir logs you in automatically.",
+                text = if (isEditing) {
+                    "Update your Student ID or Password."
+                } else {
+                    "Save once. Mr. Bashir logs you in automatically."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
@@ -66,8 +75,8 @@ fun CredentialsCard(
             OutlinedTextField(
                 value = username,
                 onValueChange = onUsernameChange,
-                label = { Text("Username / Student ID") },
-                placeholder = { Text("e.g. k21-1234") },
+                label = { Text("Student ID") },
+                placeholder = { Text("Student ID") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -77,7 +86,8 @@ fun CredentialsCard(
             OutlinedTextField(
                 value = password,
                 onValueChange = onPasswordChange,
-                label = { Text("Portal password") },
+                label = { Text("Password") },
+                placeholder = { Text("Password") },
                 singleLine = true,
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -106,14 +116,44 @@ fun CredentialsCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = onSaveAndStart,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Save & start", style = MaterialTheme.typography.labelLarge)
+            if (isEditing && onCancel != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Cancel", style = MaterialTheme.typography.labelLarge)
+                    }
+
+                    Button(
+                        onClick = onSaveAndStart,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Save changes", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            } else {
+                Button(
+                    onClick = onSaveAndStart,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = if (isEditing) "Save changes" else "Save & start",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
         }
     }
@@ -121,7 +161,6 @@ fun CredentialsCard(
 
 /**
  * Convenient overload managing password visibility internally.
- * Matches PROJECT.md interface contract.
  */
 @Composable
 fun CredentialsCard(
@@ -131,6 +170,8 @@ fun CredentialsCard(
     onPasswordChange: (String) -> Unit,
     onSaveAndStart: () -> Unit,
     modifier: Modifier = Modifier,
+    isEditing: Boolean = false,
+    onCancel: (() -> Unit)? = null,
     validationError: String? = null
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
@@ -143,6 +184,8 @@ fun CredentialsCard(
         onTogglePasswordVisibility = { passwordVisible = !passwordVisible },
         validationError = validationError,
         onSaveAndStart = onSaveAndStart,
-        modifier = modifier
+        modifier = modifier,
+        isEditing = isEditing,
+        onCancel = onCancel
     )
 }

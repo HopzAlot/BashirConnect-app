@@ -101,15 +101,15 @@ fun MrBashirScreen(
     onSave: (String, String) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onForget: () -> Unit,
     onShowTipJar: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var hasCredentials by remember { mutableStateOf(credentialStore.hasCredentials()) }
+    var isEditing by remember { mutableStateOf(false) }
     val statsStore = remember { StatsStore(context) }
     var isRunning by remember { mutableStateOf(statsStore.isServiceEnabled()) }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf(credentialStore.getUsername().orEmpty()) }
+    var password by remember { mutableStateOf(credentialStore.getPassword().orEmpty()) }
     var validationError by remember { mutableStateOf<String?>(null) }
     var activityExpanded by remember { mutableStateOf(false) }
 
@@ -215,26 +215,46 @@ fun MrBashirScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
-            // Credentials form — shown ONLY when nothing is saved yet
-            AnimatedVisibility(visible = !hasCredentials) {
+            // Credentials form — shown when nothing is saved yet or when editing
+            AnimatedVisibility(visible = !hasCredentials || isEditing) {
                 Column {
                     CredentialsCard(
                         username = username,
-                        onUsernameChange = { username = it },
+                        onUsernameChange = {
+                            username = it
+                            if (validationError != null) validationError = null
+                        },
                         password = password,
-                        onPasswordChange = { password = it },
+                        onPasswordChange = {
+                            password = it
+                            if (validationError != null) validationError = null
+                        },
+                        isEditing = isEditing,
+                        onCancel = {
+                            username = credentialStore.getUsername().orEmpty()
+                            password = credentialStore.getPassword().orEmpty()
+                            validationError = null
+                            isEditing = false
+                        },
                         validationError = validationError,
                         onSaveAndStart = {
                             if (username.isBlank() || password.isBlank()) {
-                                validationError = "Enter a username and password first"
+                                validationError = "Please enter both Student ID and Password"
                                 return@CredentialsCard
                             }
                             validationError = null
-                            onSave(username, password)
+                            val wasEditing = isEditing
+                            onSave(username.trim(), password.trim())
                             hasCredentials = true
+                            isEditing = false
                             isRunning = true
                             scope.launch {
-                                snackbarHostState.showSnackbar("Saved. Mr. Bashir is watching for networks now")
+                                val msg = if (wasEditing) {
+                                    "Credentials updated successfully! ✅"
+                                } else {
+                                    "Saved. Mr. Bashir is watching for networks now"
+                                }
+                                snackbarHostState.showSnackbar(msg)
                             }
                         }
                     )
@@ -242,7 +262,7 @@ fun MrBashirScreen(
                 }
             }
 
-            // Action buttons: Start, Stop, Forget
+            // Action buttons: Start, Stop, Edit credentials
             ActionButtons(
                 isRunning = isRunning,
                 hasCredentials = hasCredentials,
@@ -260,15 +280,11 @@ fun MrBashirScreen(
                         snackbarHostState.showSnackbar("Stopped. Wi-Fi auto-login is off for now")
                     }
                 },
-                onForget = {
-                    onForget()
-                    username = ""
-                    password = ""
-                    hasCredentials = false
-                    isRunning = false
-                    scope.launch {
-                        snackbarHostState.showSnackbar("Credentials forgotten")
-                    }
+                onEdit = {
+                    username = credentialStore.getUsername().orEmpty()
+                    password = credentialStore.getPassword().orEmpty()
+                    validationError = null
+                    isEditing = !isEditing
                 }
             )
 
