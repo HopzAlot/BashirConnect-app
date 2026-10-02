@@ -22,6 +22,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
@@ -45,6 +47,23 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+
+                    // Update check — silent on failure, one-time per launch
+                    var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
+                    val scope = rememberCoroutineScope()
+                    LaunchedEffect(Unit) {
+                        updateInfo = UpdateChecker.check(BuildConfig.VERSION_NAME)
+                    }
+                    updateInfo?.let { info ->
+                        UpdateAvailableDialog(
+                            tagName = info.tagName,
+                            onDismiss = { updateInfo = null },
+                            onDownload = {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)))
+                                updateInfo = null
+                            }
+                        )
+                    }
 
                     // Simple in-memory navigation: main screen ↔ tip jar
                     var showTipJar by remember { mutableStateOf(false) }
@@ -294,4 +313,27 @@ fun MrBashirScreen(
     }
 }
 
-
+@Composable
+private fun UpdateAvailableDialog(
+    tagName: String,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Update available", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Text(
+                "A newer version ($tagName) is available on GitHub. " +
+                "Download and install it to get the latest fixes.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            Button(onClick = onDownload) { Text("Download") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Later") }
+        }
+    )
+}
