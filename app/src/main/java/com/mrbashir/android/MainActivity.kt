@@ -19,10 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
@@ -37,10 +35,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Install FIRST — catches any exception that follows, including
-        // EncryptedSharedPreferences crashes, Compose init failures, etc.
-        CrashReporter.install(this)
-
         credentialStore = CredentialStore(this)
         requestNotificationPermissionIfNeeded()
 
@@ -50,12 +44,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val pendingCrash = remember {
-                        CrashReporter.consumePendingCrash(this@MainActivity)
-                    }
-                    if (pendingCrash != null) {
-                        CrashDialog(trace = pendingCrash)
-                    }
 
                     // Simple in-memory navigation: main screen ↔ tip jar
                     var showTipJar by remember { mutableStateOf(false) }
@@ -305,31 +293,4 @@ fun MrBashirScreen(
     }
 }
 
-/**
- * Shows a scrollable dialog with the previous run's crash stack trace.
- * Only appears when CrashReporter has a saved trace — helps diagnose
- * crashes without needing USB / logcat / Termux.
- */
-@Composable
-private fun CrashDialog(trace: String) {
-    var open by remember { mutableStateOf(true) }
-    if (!open) return
 
-    AlertDialog(
-        onDismissRequest = { open = false },
-        confirmButton = {
-            TextButton(onClick = { open = false }) { Text("Dismiss") }
-        },
-        title = { Text("⚠️ Previous crash", style = MaterialTheme.typography.titleMedium) },
-        text = {
-            Text(
-                text = trace,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier
-                    .heightIn(max = 400.dp)
-                    .verticalScroll(rememberScrollState())
-            )
-        }
-    )
-}
