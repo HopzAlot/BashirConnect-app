@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Exposes context.filesDir/updates/ to the system package installer -->
+    <files-path name="apk_downloads" path="updates/" />
+</paths>

@@ -23,7 +23,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Intent
-import android.net.Uri
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
@@ -57,11 +56,8 @@ class MainActivity : ComponentActivity() {
                     updateInfo?.let { info ->
                         UpdateAvailableDialog(
                             tagName = info.tagName,
-                            onDismiss = { updateInfo = null },
-                            onDownload = {
-                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)))
-                                updateInfo = null
-                            }
+                            downloadUrl = info.downloadUrl,
+                            onDismiss = { updateInfo = null }
                         )
                     }
 
@@ -316,24 +312,75 @@ fun MrBashirScreen(
 @Composable
 private fun UpdateAvailableDialog(
     tagName: String,
-    onDismiss: () -> Unit,
-    onDownload: () -> Unit
+    downloadUrl: String,
+    onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // null = idle, 0..99 = downloading, 100 = done/installing
+    var progress by remember { mutableStateOf<Int?>(null) }
+    var error by remember { mutableStateOf(false) }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (progress == null) onDismiss() }, // block dismiss while downloading
         title = { Text("Update available", style = MaterialTheme.typography.titleMedium) },
         text = {
-            Text(
-                "A newer version ($tagName) is available on GitHub. " +
-                "Download and install it to get the latest fixes.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Version $tagName is available. It will download and install automatically.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                when {
+                    error -> Text(
+                        "Download failed. Check your connection and try again.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    progress != null && progress!! < 100 -> {
+                        LinearProgressIndicator(
+                            progress = { progress!! / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "${progress}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    progress == 100 -> Text(
+                        "Installing...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         },
         confirmButton = {
-            Button(onClick = onDownload) { Text("Download") }
+            if (progress == null || error) {
+                Button(
+                    onClick = {
+                        error = false
+                        progress = 0
+                        scope.launch {
+                            try {
+                                UpdateChecker.downloadAndInstall(context, downloadUrl) { p ->
+                                    progress = p
+                                }
+                                progress = 100
+                            } catch (_: Exception) {
+                                error = true
+                                progress = null
+                            }
+                        }
+                    }
+                ) { Text(if (error) "Retry" else "Update") }
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Later") }
+            if (progress == null || error) {
+                TextButton(onClick = onDismiss) { Text("Later") }
+            }
         }
     )
 }
