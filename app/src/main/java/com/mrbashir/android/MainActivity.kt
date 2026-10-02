@@ -49,16 +49,23 @@ class MainActivity : ComponentActivity() {
 
                     // Update check — silent on failure, one-time per launch
                     var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
+                    var showUpdateDialog by remember { mutableStateOf(false) }
                     val scope = rememberCoroutineScope()
                     LaunchedEffect(Unit) {
-                        updateInfo = UpdateChecker.check(BuildConfig.VERSION_NAME)
+                        val info = UpdateChecker.check(BuildConfig.VERSION_NAME)
+                        if (info != null) {
+                            updateInfo = info
+                            showUpdateDialog = true
+                        }
                     }
-                    updateInfo?.let { info ->
-                        UpdateAvailableDialog(
-                            tagName = info.tagName,
-                            downloadUrl = info.downloadUrl,
-                            onDismiss = { updateInfo = null }
-                        )
+                    if (showUpdateDialog) {
+                        updateInfo?.let { info ->
+                            UpdateAvailableDialog(
+                                tagName = info.tagName,
+                                downloadUrl = info.downloadUrl,
+                                onDismiss = { showUpdateDialog = false } // keep updateInfo alive
+                            )
+                        }
                     }
 
                     // Simple in-memory navigation: main screen ↔ tip jar
@@ -79,7 +86,9 @@ class MainActivity : ComponentActivity() {
                                 credentialStore.clear()
                                 CaptivePortalService.stop(this)
                             },
-                            onShowTipJar = { showTipJar = true }
+                            onShowTipJar = { showTipJar = true },
+                            pendingUpdate = updateInfo,
+                            onShowUpdate = { showUpdateDialog = true }
                         )
                     }
                 }
@@ -106,7 +115,9 @@ fun MrBashirScreen(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onForget: (() -> Unit)? = null,
-    onShowTipJar: () -> Unit = {}
+    onShowTipJar: () -> Unit = {},
+    pendingUpdate: UpdateChecker.UpdateInfo? = null,
+    onShowUpdate: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var hasCredentials by remember { mutableStateOf(credentialStore.hasCredentials()) }
@@ -172,9 +183,29 @@ fun MrBashirScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                // Copyright shifted to the very bottom
+                // "Update available" chip — shown when user dismissed the dialog
+                if (pendingUpdate != null) {
+                    Surface(
+                        onClick = onShowUpdate,
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Update available · ${pendingUpdate.tagName}  →",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+
+                // Copyright + version at the very bottom
                 Text(
-                    text = "© 2026 BashirConnect",
+                    text = "© 2026 BashirConnect · v${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
