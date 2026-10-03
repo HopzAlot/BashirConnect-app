@@ -275,7 +275,7 @@ fun MrBashirScreen(
                         validationError = validationError,
                         onSaveAndStart = {
                             if (username.isBlank() || password.isBlank()) {
-                                validationError = "Please enter both Student ID and Password"
+                                validationError = "Please enter both Username and Password"
                                 return@CredentialsCard
                             }
                             validationError = null

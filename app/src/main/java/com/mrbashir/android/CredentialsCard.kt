@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Credentials form displayed when no credentials are saved or when editing existing credentials.
- * Features Student ID and Password field hints, password show/hide eye toggle,
+ * Features Username and Password field hints, password show/hide eye toggle,
  * and support for both initial setup and updating credentials.
  */
 @Composable
@@ -62,7 +62,7 @@ fun CredentialsCard(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = if (isEditing) {
-                    "Update your Student ID or Password."
+                    "Update your Username or Password."
                 } else {
                     "Save once. Mr. Bashir logs you in automatically."
                 },
@@ -75,8 +75,8 @@ fun CredentialsCard(
             OutlinedTextField(
                 value = username,
                 onValueChange = onUsernameChange,
-                label = { Text("Student ID") },
-                placeholder = { Text("Student ID") },
+                label = { Text("Username") },
+                placeholder = { Text("Username") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )

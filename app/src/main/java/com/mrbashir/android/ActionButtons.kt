@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Operational controls and credentials edit action button.
  * Groups Start / Stop as primary operational controls with distinct visual weight
- * (filled vs outlined), and provides an "Edit credentials" button to update Student ID or Password.
+ * (filled vs outlined), and provides an "Edit credentials" button to update Username or Password.
  */
 @Composable
 fun ActionButtons(
