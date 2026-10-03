@@ -33,6 +33,10 @@ jobs:
           echo "tag=${TAG}"            >> $GITHUB_OUTPUT
           echo "apk=${APK_NAME}"       >> $GITHUB_OUTPUT
 
+      - name: Restore signing keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/bashirconnect.keystore
+
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
@@ -44,14 +48,23 @@ jobs:
         with:
           gradle-version: 8.7
 
-      - name: Build debug APK
-        run: gradle assembleDebug -PversionCode=${{ github.run_number }} -PversionName=1.${{ github.run_number }}
+      - name: Build signed release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle assembleRelease \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=1.${{ github.run_number }} \
+            -PkeystorePath=bashirconnect.keystore \
+            -PkeystorePassword="${KEYSTORE_PASSWORD}" \
+            -PkeyAlias="${KEY_ALIAS}" \
+            -PkeyPassword="${KEY_PASSWORD}"
 
-      # Prepare only the single versioned APK
       - name: Prepare APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk "${{ steps.ver.outputs.apk }}"
+        run: cp app/build/outputs/apk/release/app-release.apk "${{ steps.ver.outputs.apk }}"
 
-      # Creates release titled "bashirconnectapk" with only the versioned APK asset
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

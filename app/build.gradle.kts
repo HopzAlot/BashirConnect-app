@@ -15,9 +15,19 @@ android {
         versionName = (findProperty("versionName") as String?) ?: "1.0"
     }
 
+    signingConfigs {
+        create("stable") {
+            storeFile     = file(findProperty("keystorePath") as String? ?: "bashirconnect.keystore")
+            storePassword = (findProperty("keystorePassword") as String?) ?: ""
+            keyAlias      = (findProperty("keyAlias") as String?) ?: ""
+            keyPassword   = (findProperty("keyPassword") as String?) ?: ""
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stable")
         }
     }
 

@@ -42,3 +42,4 @@ ORIGINAL_REQUEST.md
 # --- Docs & design artefacts (agent-generated, tracked separately) ---
 docs/
 design/
+app/bashirconnect.keystore
