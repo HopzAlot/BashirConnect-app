@@ -192,6 +192,13 @@ class CaptivePortalService : Service() {
                     AppStatus.appendLog("Check failed, retrying: ${result.error}")
                     updateNotification("Retrying login...")
                 }
+                is PortalLoginClient.Result.BadCredentials -> {
+                    // No point retrying — creds are wrong. Stop polling until user updates them.
+                    AppStatus.update(ConnectionState.ERROR)
+                    AppStatus.appendLog("Wrong Student ID or Password — please update your credentials")
+                    updateNotification("Wrong credentials — tap to update")
+                    pollingJob?.cancel()
+                }
             }
         } finally {
             connectivityManager.bindProcessToNetwork(null)

@@ -55,6 +55,8 @@ class PortalLoginClient(network: Network) {
         data class LoggedIn(val message: String) : Result()
         data class NoPortalYet(val message: String) : Result()
         data class Failure(val error: String) : Result()
+        /** Portal redirected back to the login page — username/password were rejected. */
+        data class BadCredentials(val message: String) : Result()
     }
 
     suspend fun attemptLogin(username: String, password: String): Result =
@@ -93,10 +95,17 @@ class PortalLoginClient(network: Network) {
                                 .build()
 
                             client.newCall(loginRequest).execute().use { loginResponse ->
-                                if (loginResponse.isSuccessful) {
-                                    Result.LoggedIn("Portal accepted credentials (HTTP ${loginResponse.code})")
-                                } else {
-                                    Result.Failure("Portal rejected login (HTTP ${loginResponse.code})")
+                                val finalLoginUrl = loginResponse.request.url.toString()
+                                when {
+                                    // Portal redirected back to the login page — wrong credentials
+                                    finalLoginUrl.contains("fgtauth") ->
+                                        Result.BadCredentials(
+                                            "Wrong credentials — portal redirected back to login page"
+                                        )
+                                    loginResponse.isSuccessful ->
+                                        Result.LoggedIn("Portal accepted credentials (HTTP \${loginResponse.code})")
+                                    else ->
+                                        Result.Failure("Portal rejected login (HTTP \${loginResponse.code})")
                                 }
                             }
                         }
